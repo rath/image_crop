@@ -1,17 +1,10 @@
 part of image_crop;
 
-const _kCropGridColumnCount = 3;
-const _kCropGridRowCount = 3;
-const _kCropGridColor = Color.fromRGBO(0xd0, 0xd0, 0xd0, 0.9);
 const _kCropOverlayActiveOpacity = 0.3;
-const _kCropOverlayInactiveOpacity = 0.7;
-const _kCropHandleColor = Color.fromRGBO(0xd0, 0xd0, 0xd0, 1.0);
-const _kCropHandleSize = 10.0;
-const _kCropHandleHitSize = 48.0;
+const _kCropOverlayInactiveOpacity = 0.5;
 const _kCropMinFraction = 0.1;
 
 enum _CropAction { none, moving, cropping, scaling }
-enum _CropHandleSide { none, topLeft, topRight, bottomLeft, bottomRight }
 
 class Crop extends StatefulWidget {
   final ImageProvider image;
@@ -79,7 +72,6 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
   Rect _area;
   Offset _lastFocalPoint;
   _CropAction _action;
-  _CropHandleSide _handle;
   double _startScale;
   Rect _startView;
   Tween<Rect> _viewTween;
@@ -116,7 +108,6 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
     _ratio = 1.0;
     _lastFocalPoint = Offset.zero;
     _action = _CropAction.none;
-    _handle = _CropHandleSide.none;
     _activeController = AnimationController(
       vsync: this,
       value: widget.alwaysShowGrid ? 1.0 : 0.0,
@@ -218,9 +209,7 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
     }
   }
 
-  Size get _boundaries =>
-      _surfaceKey.currentContext.size -
-      const Offset(_kCropHandleSize, _kCropHandleSize);
+  Size get _boundaries => _surfaceKey.currentContext.size;
 
   Offset _getLocalPoint(Offset point) {
     final RenderBox box = _surfaceKey.currentContext.findRenderObject();
@@ -293,6 +282,7 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
           imageWidth: _image.width,
           imageHeight: _image.height,
         );
+        _area = Rect.fromLTRB(0.1, 0.1, 0.9, 0.9);
         _view = Rect.fromLTWH(
           (viewWidth - 1.0) / 2,
           (viewHeight - 1.0) / 2,
@@ -304,60 +294,11 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
     WidgetsBinding.instance.ensureVisualUpdate();
   }
 
-  _CropHandleSide _hitCropHandle(Offset localPoint) {
-    final boundaries = _boundaries;
-    final viewRect = Rect.fromLTWH(
-      _boundaries.width * _area.left,
-      boundaries.height * _area.top,
-      boundaries.width * _area.width,
-      boundaries.height * _area.height,
-    ).deflate(_kCropHandleSize / 2);
-
-    if (Rect.fromLTWH(
-      viewRect.left - _kCropHandleHitSize / 2,
-      viewRect.top - _kCropHandleHitSize / 2,
-      _kCropHandleHitSize,
-      _kCropHandleHitSize,
-    ).contains(localPoint)) {
-      return _CropHandleSide.topLeft;
-    }
-
-    if (Rect.fromLTWH(
-      viewRect.right - _kCropHandleHitSize / 2,
-      viewRect.top - _kCropHandleHitSize / 2,
-      _kCropHandleHitSize,
-      _kCropHandleHitSize,
-    ).contains(localPoint)) {
-      return _CropHandleSide.topRight;
-    }
-
-    if (Rect.fromLTWH(
-      viewRect.left - _kCropHandleHitSize / 2,
-      viewRect.bottom - _kCropHandleHitSize / 2,
-      _kCropHandleHitSize,
-      _kCropHandleHitSize,
-    ).contains(localPoint)) {
-      return _CropHandleSide.bottomLeft;
-    }
-
-    if (Rect.fromLTWH(
-      viewRect.right - _kCropHandleHitSize / 2,
-      viewRect.bottom - _kCropHandleHitSize / 2,
-      _kCropHandleHitSize,
-      _kCropHandleHitSize,
-    ).contains(localPoint)) {
-      return _CropHandleSide.bottomRight;
-    }
-
-    return _CropHandleSide.none;
-  }
-
   void _handleScaleStart(ScaleStartDetails details) {
     _activate();
     _settleController.stop(canceled: false);
     _lastFocalPoint = details.focalPoint;
     _action = _CropAction.none;
-    _handle = _hitCropHandle(_getLocalPoint(details.focalPoint));
     _startScale = _scale;
     _startView = _view;
   }
@@ -418,7 +359,7 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
       double top,
       double right,
       double bottom,
-      @required _CropHandleSide cropHandleSide}) {
+      }) {
     var areaLeft = _area.left + (left ?? 0.0);
     var areaBottom = _area.bottom + (bottom ?? 0.0);
     var areaTop = _area.top + (top ?? 0.0);
@@ -428,14 +369,9 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
         (_image.height * _view.height * (widget.aspectRatio ?? 1.0));
     if (height >= 1.0 || width >= 1.0) {
       height = 1.0;
-
-      if (cropHandleSide == _CropHandleSide.bottomLeft ||
-          cropHandleSide == _CropHandleSide.topLeft) {
-        areaLeft = areaRight - _maxAreaWidthMap[widget.aspectRatio];
-      } else {
-        areaRight = areaLeft + _maxAreaWidthMap[widget.aspectRatio];
-      }
     }
+
+    print('$areaLeft, $areaTop, $areaRight, $areaBottom');
 
     // ensure minimum rectangle
     if (areaRight - areaLeft < _kCropMinFraction) {
@@ -495,32 +431,11 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
 
   void _handleScaleUpdate(ScaleUpdateDetails details) {
     if (_action == _CropAction.none) {
-      if (_handle == _CropHandleSide.none) {
-        _action = pointers == 2 ? _CropAction.scaling : _CropAction.moving;
-      } else {
-        _action = _CropAction.cropping;
-      }
+      _action = pointers == 2 ? _CropAction.scaling : _CropAction.moving;
     }
 
     if (_action == _CropAction.cropping) {
-      final delta = details.focalPoint - _lastFocalPoint;
-      _lastFocalPoint = details.focalPoint;
 
-      final dx = delta.dx / _boundaries.width;
-      final dy = delta.dy / _boundaries.height;
-
-      if (_handle == _CropHandleSide.topLeft) {
-        _updateArea(left: dx, top: dy, cropHandleSide: _CropHandleSide.topLeft);
-      } else if (_handle == _CropHandleSide.topRight) {
-        _updateArea(
-            top: dy, right: dx, cropHandleSide: _CropHandleSide.topRight);
-      } else if (_handle == _CropHandleSide.bottomLeft) {
-        _updateArea(
-            left: dx, bottom: dy, cropHandleSide: _CropHandleSide.bottomLeft);
-      } else if (_handle == _CropHandleSide.bottomRight) {
-        _updateArea(
-            right: dx, bottom: dy, cropHandleSide: _CropHandleSide.bottomRight);
-      }
     } else if (_action == _CropAction.moving) {
       final delta = details.focalPoint - _lastFocalPoint;
       _lastFocalPoint = details.focalPoint;
@@ -583,10 +498,10 @@ class _CropPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(
-      _kCropHandleSize / 2,
-      _kCropHandleSize / 2,
-      size.width - _kCropHandleSize,
-      size.height - _kCropHandleSize,
+      0,
+      0,
+      size.width,
+      size.height,
     );
 
     canvas.save();
@@ -615,9 +530,9 @@ class _CropPainter extends CustomPainter {
     }
 
     paint.color = Color.fromRGBO(
-        0x0,
-        0x0,
-        0x0,
+        0xff,
+        0xff,
+        0xff,
         _kCropOverlayActiveOpacity * active +
             _kCropOverlayInactiveOpacity * (1.0 - active));
     final boundaries = Rect.fromLTWH(
@@ -626,105 +541,14 @@ class _CropPainter extends CustomPainter {
       rect.width * area.width,
       rect.height * area.height,
     );
-    canvas.drawRect(Rect.fromLTRB(0.0, 0.0, rect.width, boundaries.top), paint);
-    canvas.drawRect(
-        Rect.fromLTRB(0.0, boundaries.bottom, rect.width, rect.height), paint);
-    canvas.drawRect(
-        Rect.fromLTRB(0.0, boundaries.top, boundaries.left, boundaries.bottom),
-        paint);
-    canvas.drawRect(
-        Rect.fromLTRB(
-            boundaries.right, boundaries.top, rect.width, boundaries.bottom),
-        paint);
 
-    if (!boundaries.isEmpty) {
-      _drawGrid(canvas, boundaries);
-      _drawHandles(canvas, boundaries);
-    }
+    var path = Path()
+      ..addRect(Rect.fromLTWH(0, 0, rect.width, rect.height))
+      ..addOval(boundaries)
+      ..fillType = PathFillType.evenOdd;
 
+    canvas.clipPath(path);
+    canvas.drawRect(Rect.fromLTWH(0, 0, rect.width, rect.height), paint);
     canvas.restore();
-  }
-
-  void _drawHandles(Canvas canvas, Rect boundaries) {
-    final paint = Paint()
-      ..isAntiAlias = true
-      ..color = _kCropHandleColor;
-
-    canvas.drawOval(
-      Rect.fromLTWH(
-        boundaries.left - _kCropHandleSize / 2,
-        boundaries.top - _kCropHandleSize / 2,
-        _kCropHandleSize,
-        _kCropHandleSize,
-      ),
-      paint,
-    );
-
-    canvas.drawOval(
-      Rect.fromLTWH(
-        boundaries.right - _kCropHandleSize / 2,
-        boundaries.top - _kCropHandleSize / 2,
-        _kCropHandleSize,
-        _kCropHandleSize,
-      ),
-      paint,
-    );
-
-    canvas.drawOval(
-      Rect.fromLTWH(
-        boundaries.right - _kCropHandleSize / 2,
-        boundaries.bottom - _kCropHandleSize / 2,
-        _kCropHandleSize,
-        _kCropHandleSize,
-      ),
-      paint,
-    );
-
-    canvas.drawOval(
-      Rect.fromLTWH(
-        boundaries.left - _kCropHandleSize / 2,
-        boundaries.bottom - _kCropHandleSize / 2,
-        _kCropHandleSize,
-        _kCropHandleSize,
-      ),
-      paint,
-    );
-  }
-
-  void _drawGrid(Canvas canvas, Rect boundaries) {
-    if (active == 0.0) return;
-
-    final paint = Paint()
-      ..isAntiAlias = false
-      ..color = _kCropGridColor.withOpacity(_kCropGridColor.opacity * active)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-
-    final path = Path()
-      ..moveTo(boundaries.left, boundaries.top)
-      ..lineTo(boundaries.right, boundaries.top)
-      ..lineTo(boundaries.right, boundaries.bottom)
-      ..lineTo(boundaries.left, boundaries.bottom)
-      ..lineTo(boundaries.left, boundaries.top);
-
-    for (var column = 1; column < _kCropGridColumnCount; column++) {
-      path
-        ..moveTo(
-            boundaries.left + column * boundaries.width / _kCropGridColumnCount,
-            boundaries.top)
-        ..lineTo(
-            boundaries.left + column * boundaries.width / _kCropGridColumnCount,
-            boundaries.bottom);
-    }
-
-    for (var row = 1; row < _kCropGridRowCount; row++) {
-      path
-        ..moveTo(boundaries.left,
-            boundaries.top + row * boundaries.height / _kCropGridRowCount)
-        ..lineTo(boundaries.right,
-            boundaries.top + row * boundaries.height / _kCropGridRowCount);
-    }
-
-    canvas.drawPath(path, paint);
   }
 }
