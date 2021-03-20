@@ -76,11 +76,11 @@ class ImageCrop {
       }
       return true;
     }());
-    final String path = await (_channel.invokeMethod('sampleImage', {
+    final String path = await _channel.invokeMethod('sampleImage', {
       'path': file.path,
       'maximumWidth': preferredSize ?? preferredWidth,
       'maximumHeight': preferredSize ?? preferredHeight,
-    }) as FutureOr<String>);
+    });
     return File(path);
   }
 }
