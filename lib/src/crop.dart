@@ -12,6 +12,7 @@ class Crop extends StatefulWidget {
   final double maximumScale;
   final bool alwaysShowGrid;
   final ImageErrorListener? onImageError;
+  final Rect? defaultArea;
 
   const Crop({
     Key? key,
@@ -20,6 +21,7 @@ class Crop extends StatefulWidget {
     this.maximumScale = 2.0,
     this.alwaysShowGrid = false,
     this.onImageError,
+    this.defaultArea,
   })  : assert(image != null),
         assert(maximumScale != null),
         assert(alwaysShowGrid != null),
@@ -33,6 +35,7 @@ class Crop extends StatefulWidget {
     this.maximumScale = 2.0,
     this.alwaysShowGrid = false,
     this.onImageError,
+    this.defaultArea,
   })  : image = FileImage(file, scale: scale),
         assert(maximumScale != null),
         assert(alwaysShowGrid != null),
@@ -47,6 +50,7 @@ class Crop extends StatefulWidget {
     this.maximumScale = 2.0,
     this.alwaysShowGrid = false,
     this.onImageError,
+    this.defaultArea,
   })  : image = AssetImage(assetName, bundle: bundle, package: package),
         assert(maximumScale != null),
         assert(alwaysShowGrid != null),
@@ -177,14 +181,16 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
           onScaleUpdate: _isEnabled ? _handleScaleUpdate : null,
           onScaleEnd: _isEnabled ? _handleScaleEnd : null,
           child: CustomPaint(
-            painter: _CropPainter(
+            foregroundPainter: _CropPainter(
               image: _image,
               ratio: _ratio,
               view: _view,
               area: _area,
               scale: _scale,
               active: _activeController.value,
+              defaultArea: widget.defaultArea,
             ),
+            child: _image != null && widget.defaultArea == null ? Container(color: Color(0xff000000)) : null,
           ),
         ),
       ),
@@ -282,7 +288,9 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
           imageWidth: _image!.width,
           imageHeight: _image!.height,
         );
-        _area = Rect.fromLTRB(0.1, 0.1, 0.9, 0.9);
+        if (widget.defaultArea != null) {
+          _area = Rect.fromLTRB(0.1, 0.1, 0.9, 0.9);
+        }
         _view = Rect.fromLTWH(
           (viewWidth - 1.0) / 2,
           (viewHeight - 1.0) / 2,
@@ -370,8 +378,6 @@ class CropState extends State<Crop> with TickerProviderStateMixin, Drag {
     if (height >= 1.0 || width >= 1.0) {
       height = 1.0;
     }
-
-    print('$areaLeft, $areaTop, $areaRight, $areaBottom');
 
     // ensure minimum rectangle
     if (areaRight - areaLeft < _kCropMinFraction) {
@@ -475,6 +481,7 @@ class _CropPainter extends CustomPainter {
   final Rect? area;
   final double? scale;
   final double? active;
+  final Rect? defaultArea;
 
   _CropPainter({
     this.image,
@@ -483,6 +490,7 @@ class _CropPainter extends CustomPainter {
     this.area,
     this.scale,
     this.active,
+    this.defaultArea,
   });
 
   @override
@@ -529,26 +537,29 @@ class _CropPainter extends CustomPainter {
       canvas.restore();
     }
 
-    paint.color = Color.fromRGBO(
-        0xff,
-        0xff,
-        0xff,
-        _kCropOverlayActiveOpacity * active! +
-            _kCropOverlayInactiveOpacity * (1.0 - active!));
-    final boundaries = Rect.fromLTWH(
-      rect.width * area!.left,
-      rect.height * area!.top,
-      rect.width * area!.width,
-      rect.height * area!.height,
-    );
+    if (defaultArea != null) {
+      paint.color = Color.fromRGBO(
+          0xff,
+          0xff,
+          0xff,
+          _kCropOverlayActiveOpacity * active! +
+              _kCropOverlayInactiveOpacity * (1.0 - active!));
+      final boundaries = Rect.fromLTWH(
+        rect.width * area!.left,
+        rect.height * area!.top,
+        rect.width * area!.width,
+        rect.height * area!.height,
+      );
 
-    var path = Path()
-      ..addRect(Rect.fromLTWH(0, 0, rect.width, rect.height))
-      ..addOval(boundaries)
-      ..fillType = PathFillType.evenOdd;
+      var path = Path()
+        ..addRect(Rect.fromLTWH(0, 0, rect.width, rect.height))
+        ..addOval(boundaries)
+        ..fillType = PathFillType.evenOdd;
 
-    canvas.clipPath(path);
-    canvas.drawRect(Rect.fromLTWH(0, 0, rect.width, rect.height), paint);
+      canvas.clipPath(path);
+      canvas.drawRect(Rect.fromLTWH(0, 0, rect.width, rect.height), paint);
+    }
+
     canvas.restore();
   }
 }
